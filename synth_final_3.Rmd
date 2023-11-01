@@ -1,0 +1,469 @@
+---
+title: "Synth Germany data cleaning"
+output: html_notebook
+---
+
+Briefing on Dataset Challenges and Solutions
+
+1. Diverse Data Sources: The dataset combined multiple metrics like inflation, imports, public debt, deficit, and expenditure from varied sources, leading to inconsistencies in terms of years and countries covered.
+
+2. Missing Years: Several years were missing across the datasets, leading to incomplete temporal analysis and potential bias in results.
+
+3. Missing Values for Countries: Some countries had a disproportionate number of missing values, making their inclusion problematic for a consistent comparative analysis.
+
+4. Remedial Actions:
+
+Country Exclusion: Specific countries like Estonia, Slovenia, Latvia, Lithuania, Luxemburg, and Belgium were removed due to excessive missing data, ensuring a more consistent dataset.
+
+Matching by Common Years: To ensure consistency across metrics, the data was matched based on common years available in all datasets, removing outliers in time.
+
+Interpolation for Missing Values: For years where data was still missing after the above steps, interpolation was used to estimate values based on existing data points. This helped fill gaps without introducing significant bias.
+
+
+---
+title: "Analysis of Germany's Economic Data"
+output: html_document
+---
+
+## Loading Libraries
+
+We start by importing the necessary packages:
+- `tidyverse` is a comprehensive package used for data manipulation and visualization.
+- `readxl` allows us to read in Excel files with ease.
+
+## Define Countries to be Removed
+
+Next, a list of countries that we wish to exclude from our analysis is defined. The countries in this list are: Estonia, Slovenia, Latvia, Lithuania, Luxemburg, and Belgium.
+
+## File Path
+
+The path to our primary data source, the Excel file named "GER_clean.xlsx", is specified. This file contains various economic indicators across different countries and years.
+
+## Function Definition
+
+To streamline our data cleaning and processing, a function named `read_and_process` is defined. This function does two main things:
+1. Reads data from a specified sheet of our Excel file.
+2. Excludes countries from our predefined removal list.
+
+## Reading Individual Sheets
+
+Using the function defined above, data from each sheet in the Excel file (`Inflation`, `Imports`, `Public Debt`, `Deficit`, and `Expenditure`) is read and processed. The data from each sheet is stored in its respective variable.
+
+## Transforming Data from Wide to Long Format
+
+For easier merging and analysis, the datasets are transformed from a wide format (with years as columns) to a long format. In this long format, each row represents data for a specific country and year. This transformation is done for each of the datasets individually.
+
+## Identify Common Years
+
+It's essential that our merged dataset is consistent. To achieve this, we identify years that are common across all the individual datasets. This ensures that we only include data in our final dataset for years that have information available across all economic indicators.
+
+## Filter by Common Years
+
+After identifying the common years, each dataset is filtered to only include data corresponding to these years.
+
+## Merging Datasets
+
+The individual datasets are then combined into a single comprehensive dataset. This final dataset includes all the economic indicators (`Inflation`, `Imports`, `Public Debt`, `Deficit`, and `Expenditure`) for each country and year.
+
+## Output
+
+The resultant dataset, named `long_data`, is displayed. Each row of this dataset provides a snapshot of the economic indicators for a specific country in a particular year.
+
+
+
+
+
+```{r}
+
+# Load required libraries
+library(tidyverse)
+library(readxl)
+
+# Define a vector of countries to be removed
+countries_to_remove <- c("Estonia", "Slovenia", "Latvia", "Lithuania", "Luxemburg", "Belgium")
+
+# Updated file path
+file_path <- "C:\\Users\\gabu\\Documents\\Germany\\GER_clean.xlsx"
+
+# Read the data and remove specified countries
+read_and_process <- function(file_path, sheet_name) {
+  read_excel(file_path, sheet = sheet_name) %>%
+    filter(!(`Country Code` %in% countries_to_remove))
+}
+
+# Read and process data from each sheet
+inflation_data <- read_and_process(file_path, "Inflation")
+Imports_data <- read_and_process(file_path, "Imports")
+public_debt_data <- read_and_process(file_path, "Public Debt")
+deficit_data <- read_and_process(file_path, "Deficit")
+expenditure_data <- read_and_process(file_path, "Expenditure")
+
+# Transform data from wide to long format
+long_inflation <- inflation_data %>%
+  gather(key = "Year", value = "Inflation", -`Country Code`) %>%
+  rename(Country = `Country Code`) %>%
+  mutate(Inflation = round(Inflation, 2))
+
+long_imports <- Imports_data %>%
+  gather(key = "Year", value = "Imports", -`Country Code`) %>%
+  rename(Country = `Country Code`)
+
+long_public_debt <- public_debt_data %>%
+  gather(key = "Year", value = "Public Debt", -`Country Code`) %>%
+  rename(Country = `Country Code`)
+
+long_deficit <- deficit_data %>%
+  gather(key = "Year", value = "Deficit", -`Country Code`) %>%
+  rename(Country = `Country Code`)
+
+long_expenditure <- expenditure_data %>%
+  gather(key = "Year", value = "Expenditure", -`Country Code`) %>%
+  rename(Country = `Country Code`)
+
+# Get the common years across all datasets
+common_years <- intersect(intersect(intersect(intersect(
+  unique(long_inflation$Year), 
+  unique(long_imports$Year)), 
+  unique(long_public_debt$Year)), 
+  unique(long_deficit$Year)),
+  unique(long_expenditure$Year))
+
+# Filter each dataset to only include rows with those years
+long_inflation <- long_inflation %>% filter(Year %in% common_years)
+long_imports <- long_imports %>% filter(Year %in% common_years)
+long_public_debt <- long_public_debt %>% filter(Year %in% common_years)
+long_deficit <- long_deficit %>% filter(Year %in% common_years)
+long_expenditure <- long_expenditure %>% filter(Year %in% common_years)
+
+# Merge all datasets based on Country and Year
+long_data <- left_join(long_inflation, long_imports, by = c("Country", "Year"))
+long_data <- left_join(long_data, long_public_debt, by = c("Country", "Year"))
+long_data <- left_join(long_data, long_deficit, by = c("Country", "Year"))
+long_data <- left_join(long_data, long_expenditure, by = c("Country", "Year"))
+
+# View the transformed data
+print(long_data)
+
+
+
+
+
+
+```
+
+```{r}
+# Convert the 'Year' column to numeric type
+long_data$Year <- as.numeric(long_data$Year)
+long_data$Imports <- as.numeric(long_data$Imports)
+long_data$`Public Debt` <- as.numeric(long_data$`Public Debt`)
+long_data$Deficit <- as.numeric(long_data$Deficit)
+long_data$Expenditure <- as.numeric(long_data$Expenditure)
+
+
+
+# View the cleaned data
+print(long_data)
+
+```
+
+
+```{r}
+library(ggplot2)
+
+# Plotting inflation for all countries
+ggplot(long_data, aes(x = Year, y = Inflation, color = Country)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Inflation for All Countries Over Time",
+       x = "Year",
+       y = "Inflation Rate (%)",
+       color = "Country") +
+  theme(legend.position="bottom") +
+  scale_color_brewer(palette="Set3")
+
+```
+
+```{r}
+# Filter data for Germany only
+germany_data <- long_data %>% filter(Country == "Germany")
+
+# Plotting Inflation for Germany
+ggplot(germany_data, aes(x = Year, y = Inflation)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Inflation in Germany Over Time", x = "Year", y = "Inflation") +
+  geom_point()
+
+# Plotting Public Debt for Germany
+ggplot(germany_data, aes(x = Year, y = `Public Debt`)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Public Debt in Germany Over Time", x = "Year", y = "Public Debt") +
+  geom_point()
+
+# Plotting Deficit for Germany
+ggplot(germany_data, aes(x = Year, y = Deficit)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Deficit in Germany Over Time", x = "Year", y = "Deficit") +
+  geom_point()
+
+# Plotting Expenditure for Germany
+ggplot(germany_data, aes(x = Year, y = Expenditure)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Expenditure in Germany Over Time", x = "Year", y = "Expenditure") +
+  geom_point()
+
+```
+
+
+```{r}
+# Plotting public debt for all countries over time
+ggplot(long_data, aes(x = Year, y = `Public Debt`, color = Country)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Public Debt for All Countries Over Time",
+       x = "Year",
+       y = "Public Debt",
+       color = "Country") +
+  theme(legend.position="bottom") +
+  scale_color_brewer(palette="Set3")
+
+```
+
+
+
+
+
+```{r}
+#transform to numeric 
+#mapping country to numeric and country name
+#arrange by country
+
+
+long_data$CountryNumeric <- as.numeric(as.factor(long_data$Country))
+
+# Check the mapping between Country and Country_ID
+country_mapping <- unique(long_data[, c("Country", "CountryNumeric")])
+
+
+long_data <- long_data %>%
+  arrange(Country, Year)
+
+
+
+print(country_mapping)
+print (long_data)
+```
+
+```{r}
+#check the countries in the pool
+
+country_vector <- setNames(object = country_mapping$CountryNumeric, nm = country_mapping$Country)
+
+print (country_vector)
+
+```
+
+
+---
+title: "Interpolation of missing values, why is needed"
+output: html_document
+---
+
+
+The code uses the `tidyverse` package to address missing values in the `long_data` dataset. 
+
+1. It groups the data by `Country` to ensure interpolations are done within each nation's data.
+2. The `approx` function performs linear interpolation, filling missing values for metrics like Inflation, Imports, etc., based on surrounding known points.
+3. The data is then ungrouped and displayed.
+
+**Purpose**:
+This interpolation is essential to provide a continuous dataset, which facilitates better analysis and visualization by filling gaps based on the linear relationship of known data points.
+
+
+
+```{r}
+library(tidyverse)
+
+# Linear interpolation for missing values
+long_data <- long_data %>%
+  group_by(Country) %>%
+  mutate(
+    Inflation = ifelse(is.na(Inflation), approx(Year, Inflation, Year, rule = 2)$y, Inflation),
+    Imports = ifelse(is.na(Imports), approx(Year, Imports, Year, rule = 2)$y, Imports),
+    `Public Debt` = ifelse(is.na(`Public Debt`), approx(Year, `Public Debt`, Year, rule = 2)$y, `Public Debt`),
+    Deficit = ifelse(is.na(Deficit), approx(Year, Deficit, Year, rule = 2)$y, Deficit),
+    Expenditure = ifelse(is.na(Expenditure), approx(Year, Expenditure, Year, rule = 2)$y, Expenditure)
+  ) %>%
+  ungroup()
+
+# Check the resulting dataframe
+print(long_data)
+
+```
+
+
+
+```{r}
+#working Synth Function
+
+# Load library
+
+library(Synth)
+long_data <- as.data.frame(long_data)
+
+
+
+# Create the named vector from country_mapping dataframe
+country_vector <- setNames(object = country_mapping$CountryNumeric, nm = country_mapping$Country)
+
+
+
+# Prepare the data for the Synth function using the named vector
+dataprep.out <- dataprep(
+  foo = long_data,
+  predictors = c("Deficit", "Expenditure", "Public Debt"),
+  dependent = "Inflation",
+  unit.variable = "CountryNumeric",
+  time.variable = "Year",
+  special.predictors = list(
+    list("Inflation", 1980:2011, "mean"),
+    list("Deficit", 1980:2011, "mean"),
+    list("Public Debt", 1980:2011, "mean"),
+    list("Expenditure", 1980:2011, "mean")
+  ),
+  treatment.identifier = country_vector["Germany"],  # Germany's numeric ID
+  controls.identifier = country_vector[names(country_vector) != "Germany"],  # Numeric IDs of countries other than Germany
+  time.predictors.prior = 1980:2011,
+  time.optimize.ssr = 1980:2020,
+  time.plot = 1980:2020,
+  unit.names.variable = "Country"
+)
+
+```
+
+
+```{r}
+# Load the necessary library
+library(Synth)
+
+# Compute the synthetic control using the dataprep output
+synth.out <- synth(data.prep.obj = dataprep.out)
+
+# Create synthetic tables to summarize the results
+synth.tables <- synth.tab(
+  dataprep.res = dataprep.out,
+  synth.res = synth.out
+)
+
+# Display the synthetic tables
+print(synth.tables)
+```
+
+---
+title: "Analysis of Germany's Economic Data Synth function outpu commentary"
+output: html_document
+---
+
+Overview:
+
+The output details the results from a Synthetic Control Method (SCM) analysis. The goal of SCM is to create a synthetic control (or a weighted combination of control units) that best approximates the characteristics of a treated unit in the pre-treatment period. The idea is to then use this synthetic control to predict the outcome of the treated unit in the post-treatment period if it had not been treated.
+
+Findings:
+
+Predictor Weights (solution.v):
+
+The weights (v.weights) assigned to each predictor when constructing the synthetic control are:
+
+Deficit: 21%
+Expenditure: 0% (suggesting it wasn't deemed important for constructing the synthetic control in this instance)
+Public Debt: 30.5%
+special.Inflation.1980.2011: 35.8%
+special.Deficit.1980.2011: 3.7%
+special.Public Debt.1980.2011: 9%
+special.Expenditure.1980.2011: 0%
+The weights reveal which predictors are most influential in constructing the synthetic control. Here, special.Inflation.1980.2011 is the most influential predictor followed by Public Debt.
+
+Synthetic Control Weights (solution.w):
+
+The weights show how each control unit contributes to the formation of the synthetic control:
+
+Austria: 47%
+Finland: 42.3%
+Netherlands: 10.6%
+Other countries like France, Greece, Ireland, Italy, Portugal, and Spain have zero or negligible weights, implying they do not contribute to the synthetic control for Germany.
+
+This suggests that the economic behaviors of Austria, Finland, and the Netherlands (in the specified predictors) most closely resemble that of Germany in the pre-treatment period.
+
+Predicted Values (tab.pred):
+
+For each variable, we have values for the Treated unit (Germany), the Synthetic control, and the Sample Mean:
+
+For Deficit, the synthetic control predicts a value of -1.856 compared to Germany's actual value of -1.527.
+Expenditure is predicted at 38.547 compared to Germany's 29.261.
+Similarly, other variables can be compared.
+The closer the synthetic values are to Germany's actual values in the pre-treatment period, the better the synthetic control approximates Germany.
+
+Mean Squared Prediction Errors (MSPE):
+
+The MSPE (LOSS V) is 1.699446. This is a measure of the difference between the actual values of Germany and the synthetic control's predictions in the pre-treatment period. A lower MSPE indicates a good fit of the synthetic control.
+
+Losses (tab.loss):
+
+Loss in W and V are metrics to evaluate the goodness of fit of the synthetic control. They are measures of how well the synthetic control approximates the treated unit in the pre-treatment period. In this case, the Loss W is 0.03154519, and the Loss V is 1.699446.
+
+Conclusion:
+
+The SCM analysis has provided a synthetic control for Germany using a combination of Austria, Finland, and the Netherlands. The chosen predictors and their weights show which economic indicators were deemed most important for this approximation. The MSPE and loss values can be used to assess the accuracy of the synthetic control in replicating Germany's economic behavior in the pre-treatment period. The results can be used to make post-treatment predictions and infer causal effects.
+
+
+
+
+```{r}
+path.plot(
+  synth.res = synth.out,
+  dataprep.res = dataprep.out,
+  Ylab = "Inflation",
+  Xlab = "Year",
+  Legend = c("Germany","Synthetic Germany"),
+  Main = "Inflation Synthetic Control Method: Germany vs Synthetic Germany"
+)
+
+# Assuming you want to add a vertical line at year 2011 when the Euro was introduced:
+abline(v = 2011, lty = 2)
+
+```
+
+
+---
+title: "Analysis of Germany's Economic Data Synth function outpu commentary"
+output: html_document
+---
+
+Inflation Synthetic Control Method Plot Analysis:
+
+The plot illustrates the inflation trends in Germany versus a synthetic version of Germany constructed using the Synthetic Control Method over the span of 40 years (1980-2020).
+
+Consistency in Pre-treatment Period:
+
+From 1980 to roughly 2010, the actual inflation rate in Germany (solid line) closely mirrors that of the Synthetic Germany (dashed line). This is indicative of a well-constructed synthetic control, as it closely approximates Germany's economic behavior prior to any treatment or intervention.
+Divergence in Post-treatment Period:
+
+Post-2010, there's a marked divergence between the actual Germany and its synthetic counterpart. This suggests that some event or treatment after 2010 affected Germany's inflation rate differently than what would have been predicted based on its synthetic counterpart.
+Inflation Peaks and Troughs:
+
+Both Germany and Synthetic Germany experienced a pronounced peak in inflation around the late 1980s and early 1990s. This might be indicative of some global economic events or specific events related to Germany during that time.
+After this peak, there's a sharp decline in inflation for both until the mid-1990s. Subsequently, the inflation rates stabilize, oscillating between 0 to 4 until 2010.
+Post-2010 Divergence:
+
+After 2010, while the Synthetic Germany's inflation seems to be mildly fluctuating, the actual Germany's inflation shows more pronounced fluctuations. This indicates that the actual economic factors affecting Germany post-2010 were not captured by the synthetic control, leading to these discrepancies.
+End Period Observation:
+
+Towards the end of the observed period (circa 2020), both inflation rates appear to be converging, indicating that the effects of the post-2010 events might be diminishing or that new factors are influencing both actual and synthetic Germany similarly.
+Conclusion:
+
+The Synthetic Control Method's plot for inflation showcases its strength in approximating Germany's inflation trends up to 2010. The divergence post-2010 emphasizes the importance of interpreting the synthetic control results in the context of real-world events and interventions. It's essential to consider what might have happened in Germany post-2010 that wasn't captured by the synthetic control, leading to the observed differences in inflation trends.
+
+
